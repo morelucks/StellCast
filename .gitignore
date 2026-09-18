@@ -1,0 +1,11 @@
+# Node / Vite
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# Rust / Cargo / Soroban
+target/
+**/*.rs.bk
+.soroban/
