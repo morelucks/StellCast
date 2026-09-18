@@ -1,6 +1,10 @@
 #![no_std]
 pub mod types;
 
+#[cfg(test)]
+mod test;
+
+
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Symbol};
 use types::*;
 
