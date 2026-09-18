@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "contracts/stellcast",
+    "contract",
 ]
 resolver = "2"
 

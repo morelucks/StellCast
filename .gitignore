@@ -1,11 +1,9 @@
-# Node / Vite
-node_modules/
-dist/
-.env
-.env.local
+# Node / Vite Frontend
+frontend/node_modules/
+frontend/dist/
 *.log
 
-# Rust / Cargo / Soroban
+# Rust / Cargo / Soroban Contract
 target/
-**/*.rs.bk
+contract/target/
 .soroban/
