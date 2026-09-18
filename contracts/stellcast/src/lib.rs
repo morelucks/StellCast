@@ -91,4 +91,127 @@ impl StellCastContract {
             .get(&DataKey::Market(market_id))
             .expect("market not found")
     }
+
+    pub fn buy_shares(
+        env: Env,
+        buyer: Address,
+        market_id: u64,
+        outcome: Outcome,
+        amount: i128,
+    ) -> i128 {
+        buyer.require_auth();
+
+        if amount <= 0 {
+            panic!("amount must be positive");
+        }
+
+        let mut market: Market = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Market(market_id))
+            .expect("market not found");
+
+        if market.status != MarketStatus::Open {
+            panic!("market is not open");
+        }
+
+        if env.ledger().timestamp() >= market.resolution_time {
+            panic!("market resolution time passed");
+        }
+
+        let total_pool = market.yes_shares + market.no_shares;
+
+        let shares_bought = match outcome {
+            Outcome::Yes => {
+                let user_shares = (amount * market.no_shares) / total_pool;
+                market.yes_shares += amount;
+                user_shares
+            }
+            Outcome::No => {
+                let user_shares = (amount * market.yes_shares) / total_pool;
+                market.no_shares += amount;
+                user_shares
+            }
+            _ => panic!("invalid outcome"),
+        };
+
+        if shares_bought <= 0 {
+            panic!("shares bought must be greater than zero");
+        }
+
+        market.total_liquidity += amount;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Market(market_id), &market);
+
+        // Update position
+        let pos_key = DataKey::Position((market_id, buyer.clone()));
+        let mut position: Position = env.storage().persistent().get(&pos_key).unwrap_or(Position {
+            user: buyer.clone(),
+            market_id,
+            yes_shares: 0,
+            no_shares: 0,
+        });
+
+        match outcome {
+            Outcome::Yes => position.yes_shares += shares_bought,
+            Outcome::No => position.no_shares += shares_bought,
+            _ => {}
+        }
+
+        env.storage().persistent().set(&pos_key, &position);
+
+        env.events().publish(
+            (symbol_short!("bought"), market_id, buyer),
+            (outcome as u32, shares_bought, amount),
+        );
+
+        shares_bought
+    }
+
+    pub fn get_position(env: Env, market_id: u64, user: Address) -> Position {
+        let pos_key = DataKey::Position((market_id, user.clone()));
+        env.storage().persistent().get(&pos_key).unwrap_or(Position {
+            user,
+            market_id,
+            yes_shares: 0,
+            no_shares: 0,
+        })
+    }
+
+    pub fn resolve_market(env: Env, admin: Address, market_id: u64, winning_outcome: Outcome) {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+
+        if admin != stored_admin {
+            panic!("only admin can resolve");
+        }
+
+        let mut market: Market = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Market(market_id))
+            .expect("market not found");
+
+        if market.status != MarketStatus::Open {
+            panic!("market not open");
+        }
+
+        market.status = MarketStatus::Resolved;
+        market.winning_outcome = winning_outcome;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Market(market_id), &market);
+
+        env.events().publish(
+            (symbol_short!("resolved"), market_id),
+            winning_outcome as u32,
+        );
+    }
 }
